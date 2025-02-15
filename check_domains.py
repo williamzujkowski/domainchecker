@@ -13,16 +13,42 @@ import ssl
 from email.mime.text import MIMEText
 from threading import Lock
 
-# Load configuration
-try:
-    with open("config.json") as f:
-        config = json.load(f)
-except Exception as e:
-    sys.exit(f"Error loading config.json: {e}")
+
+def load_config():
+    """
+    Load configuration from config.json and resolve any environment variable placeholders.
+    For any string value of the form "${VAR}", substitute it with the value of the environment variable VAR.
+    """
+    try:
+        with open("config.json") as f:
+            config = json.load(f)
+    except Exception as e:
+        sys.exit(f"Error loading config.json: {e}")
+
+    def resolve(item):
+        if isinstance(item, dict):
+            return {k: resolve(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [resolve(x) for x in item]
+        elif isinstance(item, str):
+            # If the string is in the form "${VAR}", attempt to resolve it.
+            if item.startswith("${") and item.endswith("}"):
+                env_var = item[2:-1]
+                return os.environ.get(env_var, item)
+            return item
+        else:
+            return item
+
+    return resolve(config)
+
+
+# Load configuration (with environment variable resolution)
+config = load_config()
 
 THREAD_COUNT = config.get("thread_count", 10)
 CHECK_TIMEOUT = config.get("check_timeout", 10)
 DOMAINR_API_TYPE = config.get("domainr_api_type", "rapidapi")
+# Split the API keys string by comma if provided.
 DOMAINR_API_KEYS = (
     config.get("domainr_api_keys", "").split(",")
     if config.get("domainr_api_keys")

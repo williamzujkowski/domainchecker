@@ -9,7 +9,37 @@ import requests
 from generate_domains import generate_domains
 from check_domains import check_domains
 
-# Set up logging with fallback to console if needed
+
+def load_config():
+    """
+    Load configuration from config.json and resolve any environment variable placeholders.
+    """
+    try:
+        with open("config.json") as f:
+            config = json.load(f)
+    except Exception as e:
+        sys.exit(f"Error loading config.json: {e}")
+
+    def resolve(item):
+        if isinstance(item, dict):
+            return {k: resolve(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [resolve(x) for x in item]
+        elif isinstance(item, str):
+            if item.startswith("${") and item.endswith("}"):
+                env_var = item[2:-1]
+                return os.environ.get(env_var, item)
+            return item
+        else:
+            return item
+
+    return resolve(config)
+
+
+# Load configuration (with env var resolution)
+config = load_config()
+
+# Set up logging with fallback to console if file access fails
 os.makedirs("logs", exist_ok=True)
 LOG_FILE = "logs/run_all.log"
 handlers = [logging.StreamHandler(sys.stdout)]
@@ -43,15 +73,6 @@ def fetch_tld_list():
         return ["us", "uk", "ca", "de", "fr"]
 
 
-def load_config():
-    try:
-        with open("config.json") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Error loading config.json: {e}")
-        sys.exit(1)
-
-
 def cache_fresh(file_path, max_age_days):
     if os.path.exists(file_path):
         age = time.time() - os.path.getmtime(file_path)
@@ -60,7 +81,6 @@ def cache_fresh(file_path, max_age_days):
 
 
 def main():
-    config = load_config()
     max_cache_age_days = config.get("max_cache_age_days", 7)
     min_tld = config.get("min_tld_length", 2)
     min_sld = config.get("min_sld_length", 2)
