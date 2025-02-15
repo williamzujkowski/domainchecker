@@ -8,14 +8,38 @@ import json
 import os
 import requests
 
-# Load configuration
-try:
-    with open("config.json") as f:
-        config = json.load(f)
-except Exception as e:
-    sys.exit(f"Error loading config.json: {e}")
 
-# Set up logging with fallback to console if needed
+def load_config():
+    """
+    Load configuration from config.json and resolve any environment variable placeholders.
+    For any string value of the form "${VAR}", substitute it with the value of the environment variable VAR.
+    """
+    try:
+        with open("config.json") as f:
+            config = json.load(f)
+    except Exception as e:
+        sys.exit(f"Error loading config.json: {e}")
+
+    def resolve(item):
+        if isinstance(item, dict):
+            return {k: resolve(v) for k, v in item.items()}
+        elif isinstance(item, list):
+            return [resolve(x) for x in item]
+        elif isinstance(item, str):
+            if item.startswith("${") and item.endswith("}"):
+                env_var = item[2:-1]
+                return os.environ.get(env_var, item)
+            return item
+        else:
+            return item
+
+    return resolve(config)
+
+
+# Load configuration (with env var resolution)
+config = load_config()
+
+# Set up logging with fallback to console if file access fails
 os.makedirs("logs", exist_ok=True)
 LOG_FILE = "logs/generate_domains.log"
 handlers = [logging.StreamHandler(sys.stdout)]
@@ -34,6 +58,10 @@ RESERVED_FILE = "reserved_domains.json"
 
 
 def load_reserved_list():
+    """
+    Load the set of reserved domain strings from RESERVED_FILE.
+    Returns an empty set if the file does not exist or cannot be read.
+    """
     if os.path.exists(RESERVED_FILE):
         try:
             with open(RESERVED_FILE, "r") as f:
@@ -52,6 +80,7 @@ def load_reserved_list():
 def load_valid_words():
     """
     Load a set of 4-letter English words using NLTK.
+    This is used for filtering candidate domains to valid words.
     """
     try:
         import nltk
@@ -91,7 +120,8 @@ def get_valid_tlds():
 
 def is_reserved(domain_str, tld_str, reserved_set):
     """
-    Check if the candidate combination is reserved.
+    Check if the candidate combination should be excluded.
+    Returns True if either the SLD or TLD is reserved or the full combination is reserved.
     """
     if domain_str == tld_str:
         return True
@@ -109,6 +139,18 @@ def generate_domains(
     reserved_set=None,
     emoji_mode=False,
 ):
+    """
+    Generate candidate domains.
+
+    - If emoji_mode is True, generate candidate domains using emoji characters.
+    - Otherwise, generate domains using 2-letter combinations from the Latin alphabet.
+
+    Optional filters:
+      - prefix_domain: SLD must start with these characters.
+      - prefix_tld: TLD must start with these characters.
+      - only_words: Only yield domains where the concatenation of SLD and TLD is a valid 4-letter word.
+      - reserved_set: A set of reserved strings to exclude.
+    """
     count = 0
     if emoji_mode:
         emoji_list = ["😀", "😃", "😄", "😁", "😆", "😂", "🤣", "😊", "😍", "😉"]
@@ -128,7 +170,7 @@ def generate_domains(
         letters = string.ascii_lowercase
         valid_tlds = get_valid_tlds()
         # Apply minimum TLD length from config
-        min_tld = config.get("min_tld_length", 1)
+        min_tld = config.get("min_tld_length", 2)
         valid_tlds = [t for t in valid_tlds if len(t) >= min_tld]
         for domain_tuple in itertools.product(letters, repeat=2):
             domain_str = "".join(domain_tuple)
@@ -160,13 +202,13 @@ def main():
         "--prefix-domain",
         type=str,
         default="",
-        help="Filter domain parts starting with these characters.",
+        help="Filter domains with SLD starting with these characters.",
     )
     parser.add_argument(
         "--prefix-tld",
         type=str,
         default="",
-        help="Filter TLD parts starting with these characters.",
+        help="Filter domains with TLD starting with these characters.",
     )
     parser.add_argument(
         "--outfile",
@@ -177,10 +219,12 @@ def main():
     parser.add_argument(
         "--only-words",
         action="store_true",
-        help="Only output domains forming a valid 4-letter English word.",
+        help="Only output domains that form a valid 4-letter English word.",
     )
     parser.add_argument(
-        "--emoji", action="store_true", help="Generate candidate domains using emoji."
+        "--emoji",
+        action="store_true",
+        help="Generate candidate domains using emoji characters.",
     )
     args = parser.parse_args()
 
