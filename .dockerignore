@@ -1,0 +1,30 @@
+# Ignore Python cache and build files
+__pycache__
+*.py[cod]
+*$py.class
+build
+dist
+
+# Ignore virtual environments
+venv
+ENV
+env
+.venv
+
+# Ignore logs and output directories
+logs
+output
+
+# Ignore git and other version control directories
+.git
+.gitignore
+
+# Ignore local configuration files
+config.json
+reserved_domains.json
+tld_list.json
+domain_results.json
+
+# Ignore OS-specific files
+.DS_Store
+Thumbs.db

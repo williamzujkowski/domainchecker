@@ -1,0 +1,28 @@
+services:
+  domain_checker:
+    build: .
+    container_name: domain_checker
+    environment:
+      # Set Domainr API keys (comma-separated if more than one)
+      - DOMAINR_API_KEYS=dce94faaaemshede1a42a6982a6ap1e2d01jsn05b64b85a254,YOUR_DOMAINR_KEY2
+      - DOMAINR_API_TYPE=rapidapi
+      # Email notification configuration (optional)
+      - ENABLE_EMAIL=true
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_PORT=465
+      - SMTP_USER=your_email@gmail.com
+      - SMTP_PASS=your_email_app_password
+      - EMAIL_TO=recipient@example.com
+      # Webhook configuration (optional)
+      - ENABLE_WEBHOOK=false
+      - WEBHOOK_URL=
+      # Enable ML heuristics (optional)
+      - ENABLE_ML_HEURISTICS=true
+      # Configure thread count (optional)
+      - THREAD_COUNT=10
+      # Cron schedule (default: daily at midnight)
+      - CRON_EXPR=0 0 * * *
+    volumes:
+      - ./logs:/app/logs
+      - ./output:/app/output
+    restart: unless-stopped
